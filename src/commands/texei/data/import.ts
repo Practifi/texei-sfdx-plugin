@@ -41,6 +41,11 @@ export default class Import extends SfdxCommand {
       char: "a",
       description: messages.getMessage("allOrNoneFlagDescription"),
       required: false
+    }),
+    keyfield: flags.string({
+      char: "k",
+      description: 'the key field to identify the record',
+      required: false
     })
   };
 
@@ -140,26 +145,78 @@ export default class Import extends SfdxCommand {
     
     let sobjectsResult:Array<RecordResult> = new Array<RecordResult>();
 
-    // So far, a whole file will be either inserted or updated
-    if (records[0] && records[0].Id) {
-      // There is an Id, so it's an update
-      this.debug(`DEBUG updating ${sobjectName} records`);
+    if(!records || !records.length) {
+      return;
+    }
 
-      // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
-      sobjectsResult = await conn.sobject(sobjectName).update(records, { allowRecursive: true, allOrNone: this.flags.allornone })
-                                                      .catch(err => {
-                                                        throw new SfdxError(`Error importing records: ${err}`);
-                                                      });
+    const keyField = this.flags.keyfield;
+    if(keyField) {
+      const recordList = await conn.query(`SELECT Id, ${keyField} FROM ${sobjectName}`);
+      const recordListMap = new Map();
+      for(const record of recordList.records) {
+        const key = record[keyField];
+        if(key) {
+          recordListMap.set(key, record.Id);
+        }
+      }
+
+      const recordsToInsert = [];
+      const recordsToUpdate = [];
+      for(const record of records) {
+        const key = record[keyField];
+        if(recordListMap.has(key)) {
+          record.Id = recordListMap.get(key);
+          recordsToUpdate.push(record);
+        }
+        else {
+          recordsToInsert.push(record);
+        }
+      }
+
+      if(recordsToUpdate.length) {
+        this.debug(`DEBUG updating ${sobjectName} records`);
+
+        // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
+        const sobjectsResultToUpdate = await conn.sobject(sobjectName).update(recordsToUpdate, { allowRecursive: true, allOrNone: this.flags.allornone })
+                                                        .catch(err => {
+                                                          throw new SfdxError(`Error importing records: ${err}`);
+                                                        });
+        sobjectsResult.push(...sobjectsResultToUpdate);
+      }
+      
+      if(recordsToInsert.length) {
+        this.debug(`DEBUG inserting ${sobjectName} records`);
+
+        // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
+        const sobjectsResultToInsert = await conn.sobject(sobjectName).insert(recordsToInsert, { allowRecursive: true, allOrNone: this.flags.allornone })
+                                                        .catch(err => {
+                                                          throw new SfdxError(`Error importing records: ${err}`);
+                                                        });
+        sobjectsResult.push(...sobjectsResultToInsert);
+      }
     }
     else {
-      // No Id, insert
-      this.debug(`DEBUG inserting ${sobjectName} records`);
+      // So far, a whole file will be either inserted or updated
+      if (records[0] && records[0].Id) {
+        // There is an Id, so it's an update
+        this.debug(`DEBUG updating ${sobjectName} records`);
 
-      // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
-      sobjectsResult = await conn.sobject(sobjectName).insert(records, { allowRecursive: true, allOrNone: this.flags.allornone })
-                                                      .catch(err => {
-                                                        throw new SfdxError(`Error importing records: ${err}`);
-                                                      });
+        // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
+        sobjectsResult = await conn.sobject(sobjectName).update(records, { allowRecursive: true, allOrNone: this.flags.allornone })
+                                                        .catch(err => {
+                                                          throw new SfdxError(`Error importing records: ${err}`);
+                                                        });
+      }
+      else {
+        // No Id, insert
+        this.debug(`DEBUG inserting ${sobjectName} records`);
+
+        // @ts-ignore: Don't know why, but TypeScript doesn't use the correct method override
+        sobjectsResult = await conn.sobject(sobjectName).insert(records, { allowRecursive: true, allOrNone: this.flags.allornone })
+                                                        .catch(err => {
+                                                          throw new SfdxError(`Error importing records: ${err}`);
+                                                        });
+      }
     }
 
     // Some errors are part of RecordResult but don't throw an exception
