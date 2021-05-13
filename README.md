@@ -110,13 +110,13 @@ EXAMPLES
 
 _See code: [src/commands/texei/data/export.ts](https://github.com/texei/texei-sfdx-plugin/blob/v1.10.0/src/commands/texei/data/export.ts)_
 
-## `sfdx texei:data:import -d <string> [-a] [-u <string>] [--apiversion <string>] [--json] [--loglevel trace|debug|info|warn|error|fatal|TRACE|DEBUG|INFO|WARN|ERROR|FATAL]`
+## `sfdx texei:data:import -d <string> -f <string> -k <string> [-a] [-u <string>] [--apiversion <string>] [--json] [--loglevel trace|debug|info|warn|error|fatal|TRACE|DEBUG|INFO|WARN|ERROR|FATAL]`
 
 import objects' data to org
 
 ```
 USAGE
-  $ sfdx texei:data:import -d <string> [-a] [-u <string>] [--apiversion <string>] [--json] [--loglevel 
+  $ sfdx texei:data:import -d <string> -f <string> -k <string> [-a] [-u <string>] [--apiversion <string>] [--json] [--loglevel 
   trace|debug|info|warn|error|fatal|TRACE|DEBUG|INFO|WARN|ERROR|FATAL]
 
 OPTIONS
@@ -124,8 +124,12 @@ OPTIONS
                                                                                     all changes for the call to be
                                                                                     rolled back
 
-  -d, --inputdir=inputdir                                                           (required) directory with files to
+  -d, --inputdir=inputdir                                                           directory with files to
                                                                                     import
+
+  -f, --inputfile=inputfile                                                         file to import
+
+  -k, --keyfield=keyfield                                                           the key field used to match the records
 
   -u, --targetusername=targetusername                                               username or alias for the target
                                                                                     org; overrides default target org
@@ -140,6 +144,8 @@ OPTIONS
 
 EXAMPLE
   $ sfdx texei:data:import --inputdir ./data --targetusername texei-scratch
+     Data imported!
+  $ sfdx texei:data:import -f ./data/1-Custom__c.json -k Key_Field__c --targetusername texei-scratch
      Data imported!
 ```
 

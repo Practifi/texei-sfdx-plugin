@@ -35,7 +35,12 @@ export default class Import extends SfdxCommand {
     inputdir: flags.string({
       char: "d",
       description: messages.getMessage("inputFlagDescription"),
-      required: true
+      required: false
+    }),
+    inputfile: flags.string({
+      char: "f",
+      description: 'input file',
+      required: false
     }),
     allornone: flags.boolean({
       char: "a",
@@ -68,34 +73,50 @@ export default class Import extends SfdxCommand {
     )).records[0] as any).Id;
     recordIdsMap.set("SfdxOrgUser", scratchOrgUserId);
 
-    // Get files in directory
-    const filesPath = path.join(process.cwd(), this.flags.inputdir);
+    if(this.flags.inputdir) {
+      // Get files in directory
+      const filesPath = path.join(process.cwd(), this.flags.inputdir);
 
-    // Read data file
-    const readDir = util.promisify(fs.readdir);
-    let dataFiles = (await readDir(filesPath, "utf8")).filter(f => {
-      return !isNaN(f.substr(0, f.indexOf('-')));
-    }).sort(function(a, b) {
-      return a.substr(0, a.indexOf('-'))-b.substr(0, b.indexOf('-'))
-    });
-    
-    // Read and import data
-    for (const dataFile of dataFiles) {
+      // Read data file
+      const readDir = util.promisify(fs.readdir);
+      let dataFiles = (await readDir(filesPath, "utf8")).filter(f => {
+        return !isNaN(f.substr(0, f.indexOf('-')));
+      }).sort(function(a, b) {
+        return a.substr(0, a.indexOf('-'))-b.substr(0, b.indexOf('-'))
+      });
+      
+      // Read and import data
+      for (const dataFile of dataFiles) {
 
-      // If file doesn't start with a number, just don't parse it (could be data-plan.json)
-      if (!isNaN(dataFile.substring(0,1))) {
-        const objectName = await this.getObjectNameFromFile(dataFile);
+        // If file doesn't start with a number, just don't parse it (could be data-plan.json)
+        if (!isNaN(dataFile.substring(0,1))) {
+          const objectName = await this.getObjectNameFromFile(dataFile);
 
-        this.ux.startSpinner(`Importing ${dataFile}`, null, { stdout: true });
+          this.ux.startSpinner(`Importing ${dataFile}`, null, { stdout: true });
 
-        const objectRecords:Array<Record> = (await this.readFile(dataFile)).records;
+          const objectRecords:Array<Record> = (await this.readFile(dataFile)).records;
 
-        await this.prepareDataForInsert(objectName, objectRecords);
-        await this.upsertData(objectRecords, objectName);
+          await this.prepareDataForInsert(objectName, objectRecords);
+          await this.upsertData(objectRecords, objectName);
 
-        this.ux.stopSpinner(`Done.`);
+          this.ux.stopSpinner(`Done.`);
+        }
       }
     }
+    else if(this.flags.inputfile) {
+      const dataFile = this.flags.inputfile;
+      const objectName = await this.getObjectNameFromFile(dataFile);
+
+      this.ux.startSpinner(`Importing ${dataFile}`, null, { stdout: true });
+
+      const objectRecords:Array<Record> = (await this.readFile(dataFile)).records;
+
+      await this.prepareDataForInsert(objectName, objectRecords);
+      await this.upsertData(objectRecords, objectName);
+
+      this.ux.stopSpinner(`Done.`);
+    }
+    
 
     return { message: "Data imported" };
   }
@@ -283,16 +304,16 @@ export default class Import extends SfdxCommand {
 
   private async getObjectNameFromFile(filePath: string) {
     // Check expected file name format
-    if (filePath.indexOf("-") === -1 || filePath.indexOf(".json") === -1) {
+    if (filePath.lastIndexOf("-") === -1 || filePath.lastIndexOf(".json") === -1) {
       throw new SfdxError(`Invalid file name: ${filePath}`);
     }
 
     // From 1-MyCustomObject__c.json or 1-MyCustomObject-MyLabel__c.json to MyCustomObject__c
     let fileName: string = '';
-    fileName = filePath.substring(filePath.indexOf("-") + 1).replace(".json", "");
-    if (fileName.indexOf("-") > 0) {
+    fileName = filePath.substring(filePath.lastIndexOf("-") + 1).replace(".json", "");
+    if (fileName.lastIndexOf("-") > 0) {
       // Format is 1-MyCustomObject-MyLabel__c.json
-      fileName = fileName.substring(0, fileName.indexOf("-"));
+      fileName = fileName.substring(0, fileName.lastIndexOf("-"));
     }
 
     return fileName;
